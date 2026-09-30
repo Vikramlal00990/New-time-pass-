@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+</head>
+
+<body>
+    <div id="hc"></div>
+    <script src="https://js.hcaptcha.com/1/api.js?onload=onHcaptchaLoad&render=explicit" async defer></script>
+    <script>
+        // Invisible hCaptcha: renders + executes on load, token lands in cf-response.
+        // (Visible checkbox challenges cannot be solved automatically.)
+        window.onHcaptchaLoad = function () {
+            var widgetId = hcaptcha.render('hc', {
+                sitekey: '<site-key>',
+                size: 'invisible',
+                callback: function (token) {
+                    var c = document.createElement('input');
+                    c.type = 'hidden';
+                    c.name = 'cf-response';
+                    c.value = token;
+                    document.body.appendChild(c);
+                }
+            });
+            hcaptcha.execute(widgetId);
+        };
+    </script>
+</body>
+
+</html>

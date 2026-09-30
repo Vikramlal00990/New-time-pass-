@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+</head>
+
+<body>
+    <script src="https://www.google.com/recaptcha/api.js?render=<site-key>"></script>
+    <script>
+        // Invisible reCAPTCHA v3: executes on load, token lands in cf-response.
+        // (Checkbox-style v2 challenges cannot be solved automatically.)
+        function emitToken(token) {
+            var c = document.createElement('input');
+            c.type = 'hidden';
+            c.name = 'cf-response';
+            c.value = token;
+            document.body.appendChild(c);
+        }
+        grecaptcha.ready(function () {
+            grecaptcha.execute('<site-key>', { action: 'submit' }).then(
+                emitToken,
+                function () { /* token failed — waitForSelector will time out */ }
+            );
+        });
+    </script>
+</body>
+
+</html>
