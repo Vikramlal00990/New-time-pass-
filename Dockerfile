@@ -22,6 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr2 \
     xdg-utils \
     xvfb \
+    curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
@@ -31,6 +33,13 @@ WORKDIR /app
 COPY package*.json ./
 # ci = clean, reproducible install from the lockfile (no `npm update` surprises)
 RUN npm ci --omit=dev
+
+ARG CHROME_VERSION=154.0.8037.92
+# Chrome for Testing, baked in — no CHROME_PATH env needed
+RUN curl -fsSL -o /tmp/chrome.zip "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chrome-linux64.zip" \
+    && unzip -q /tmp/chrome.zip -d /opt/chrome \
+    && rm /tmp/chrome.zip
+ENV CHROME_PATH=/opt/chrome/chrome-linux64/chrome
 
 COPY . .
 

@@ -194,6 +194,7 @@ Set the `timeOut` env var in milliseconds (default `60000`).
 | `authToken` | — | If set, required in every request body (single token) |
 | `AUTH_TOKENS` | — | Multiple tokens: `a,b,c` or JSON `[{"token":"a","limit":5}]` (per-token concurrency limit) |
 | `HEADLESS` | `false` | Set `true` to run Chrome headless (no Xvfb) |
+| `CHROME_PATH` | auto-detected | Path to Chrome/Chromium. Not needed in Docker (Chrome is baked into the image); on other hosts the server auto-detects common install locations |
 | `CHROME_ARGS` | — | Extra Chrome flags, space-separated, e.g. `--no-sandbox --proxy-server=http://127.0.0.1:8080` |
 | `BODY_LIMIT` | `1mb` | Max JSON body size |
 | `CORS_ORIGIN` | — | If set, CORS is restricted to this origin |
