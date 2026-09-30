@@ -39,7 +39,10 @@ ARG CHROME_VERSION=154.0.8037.92
 RUN curl -fsSL -o /tmp/chrome.zip "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chrome-linux64.zip" \
     && unzip -q /tmp/chrome.zip -d /opt/chrome \
     && rm /tmp/chrome.zip
+# Solve like the original: headed browser under Xvfb (don't set HEADLESS=true)
+# and no fingerprint spoofing — Cloudflare trusts this combo the most.
 ENV CHROME_PATH=/opt/chrome/chrome-linux64/chrome
+ENV FINGERPRINT_ROTATION=false
 
 COPY . .
 
