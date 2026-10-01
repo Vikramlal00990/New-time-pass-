@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+</head>
+<body>
+    <div id="v2-slot"></div>
+    <script src="https://www.google.com/recaptcha/api.js?render=explicit&onload=onloadRecaptchaCallback" async defer></script>
+    <script>
+        window.__recaptchaReady = false;
+        window.onloadRecaptchaCallback = function() {
+            try {
+                window.__v2WidgetId = grecaptcha.render('v2-slot', {
+                    sitekey: '<site-key>',
+                    size: '<size>',
+                    callback: function(token) {
+                        window.__v2Token = token;
+                    },
+                });
+                // For invisible, auto-execute
+                if ('<size>' === 'invisible') {
+                    grecaptcha.execute(window.__v2WidgetId);
+                }
+                window.__recaptchaReady = true;
+            } catch (e) {
+                window.__recaptchaError = String(e && e.message ? e.message : e);
+            }
+        };
+    </script>
+</body>
+</html>

@@ -23,6 +23,39 @@ async function solveTurnstileTurbo({ url, proxy, headers, debug, timeout, siteKe
 
     const ms = resolveTimeout(timeout);
     const t0 = Date.now();
+
+    // TURBO v2: Warmup via HTML script tags is flaky (window.turnstile often
+    // missing). Instead, do an optimized fresh-context solve with the proven
+    // widgetSolver. This is faster than the old turbo which wasted 20s on
+    // failed warmup. True warm-page reuse is disabled until the loader flakiness
+    // is root-caused.
+    // To re-enable warmup: set TURBO_WARMUP=1
+    const useWarmup = process.env.TURBO_WARMUP === '1';
+
+    if (!useWarmup) {
+        try {
+            return await withTimeout(
+                (async () => {
+                    const tS0 = Date.now();
+                    const tok = await solveInvisibleWidget({
+                        url, proxy, headers, debug, timeout,
+                        siteKey, template: 'fakePage.html', label: 'solveTurnstileTurbo/fast',
+                    });
+                    if (!tok || tok.length < 10) throw new Error('Failed to get token');
+                    return {
+                        token: tok, warm: false, warmError: null,
+                        turboMs: { acquire: 0, solve: Date.now() - tS0, total: Date.now() - t0 },
+                    };
+                })(),
+                ms,
+                'solveTurnstileTurbo'
+            );
+        } catch (err) {
+            throw err;
+        }
+    }
+
+    // --- Legacy warmup path (disabled by default, see above) ---
     let acquired = null;
 
     try {

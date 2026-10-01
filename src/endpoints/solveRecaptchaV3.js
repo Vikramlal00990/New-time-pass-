@@ -21,17 +21,25 @@ async function solveRecaptchaV3({ url, proxy, headers, debug, timeout, siteKey, 
                 page = await context.newPage();
                 await setupPage(page, proxy, { headers });
 
+                // Use HTML template with script tags (proven pattern from Turnstile).
+                // page.evaluate script injection is flaky on request.respond() pages.
+                const fs = require('fs');
+                const path = require('path');
+                const template = String(
+                    fs.readFileSync(path.join(__dirname, '..', 'data', 'recaptchaV3.html'))
+                ).replace('<site-key>', siteKey);
+
                 await page.setRequestInterception(true);
                 page.on('request', (request) => {
                     try {
                         const rurl = request.url();
                         const rtype = request.resourceType();
-                        // Allow the target document and recaptcha scripts
+                        // Serve the template for the target document
                         if (([url, url + '/'].includes(rurl) && rtype === 'document')) {
                             request.respond({
                                 status: 200,
                                 contentType: 'text/html',
-                                body: '<html><head></head><body></body></html>',
+                                body: template,
                             });
                         } else if (rurl.includes('google.com/recaptcha') || rurl.includes('gstatic.com/recaptcha')) {
                             request.continue();
@@ -45,22 +53,10 @@ async function solveRecaptchaV3({ url, proxy, headers, debug, timeout, siteKey, 
 
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-                // Inject api.js?render=siteKey
-                await page.evaluate((sk) => {
-                    return new Promise((resolve, reject) => {
-                        if (window.grecaptcha) return resolve();
-                        const s = document.createElement('script');
-                        s.src = 'https://www.google.com/recaptcha/api.js?render=' + sk;
-                        s.onload = () => resolve();
-                        s.onerror = () => reject(new Error('recaptcha api.js load failed'));
-                        document.head.appendChild(s);
-                        setTimeout(() => reject(new Error('recaptcha api.js timeout')), 20000);
-                    });
-                }, siteKey);
-
+                // Wait for grecaptcha to be ready (signaled by template script)
                 await page.waitForFunction(
-                    () => window.grecaptcha && typeof window.grecaptcha.execute === 'function',
-                    { timeout: 20000 }
+                    () => window.__recaptchaReady === true,
+                    { timeout: 25000 }
                 );
 
                 const token = await page.evaluate((sk, a) => {
