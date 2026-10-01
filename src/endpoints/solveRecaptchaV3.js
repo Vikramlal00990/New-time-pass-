@@ -31,6 +31,13 @@ async function solveRecaptchaV3({ url, proxy, headers, debug, timeout, siteKey, 
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
                 console.log('[v3] stage: goto done');
 
+                // Human-like behavior (anti-detection from solver_ultimate.js)
+                try {
+                    await page.mouse.move(300, 400, { steps: 8 });
+                    await page.mouse.move(600, 300, { steps: 10 });
+                    await page.evaluate(() => window.scrollBy(0, 150));
+                } catch (e) {}
+
                 // Inject reCAPTCHA v3 api.js ourselves (don't depend on the page).
                 // With a working proxy, Google serves the script.
                 const injected = await page.evaluate((sk) => {

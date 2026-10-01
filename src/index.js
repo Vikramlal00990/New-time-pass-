@@ -88,6 +88,28 @@ app.get('/history/daily', (req, res) => {
     res.json(dashboard.dbDailyStats());
 });
 
+// ---- debug endpoints (from solver_ultimate.js) ----
+const debugHistory = {
+    tokens: [],  // { time, mode, elapsed, preview }
+    errors: [],  // { time, mode, error }
+    pushToken(mode, elapsed, token) {
+        this.tokens.unshift({ time: new Date().toISOString(), mode, elapsed, preview: String(token).substring(0, 24) + '...' });
+        if (this.tokens.length > 50) this.tokens.pop();
+    },
+    pushError(mode, error) {
+        this.errors.unshift({ time: new Date().toISOString(), mode, error: String(error).substring(0, 200) });
+        if (this.errors.length > 50) this.errors.pop();
+    },
+};
+global.debugHistory = debugHistory;
+app.get('/tokens', (req, res) => res.json(debugHistory.tokens));
+app.get('/errors', (req, res) => res.json(debugHistory.errors));
+app.get('/queue', (req, res) => res.json({
+    queued: semaphore.queued,
+    active: global.browserLength,
+    limit: global.browserLimit,
+}));
+
 // ---- mode runners ----
 const getSource = require('./endpoints/getSource');
 const solveTurnstileMin = require('./endpoints/solveTurnstile.min');
@@ -349,10 +371,16 @@ app.post('/cf-clearance-scraper', async (req, res) => {
     }
 
     try {
+        const t0 = Date.now();
         const r = await executeRequest(data);
+        const elapsed = Date.now() - t0;
         if (r.ok) {
+            // Track successful token (from solver_ultimate.js)
+            const tok = r.out && (r.out.token || (r.out.result && r.out.result.token));
+            if (tok && global.debugHistory) global.debugHistory.pushToken(data.mode, elapsed, tok);
             res.status(r.out.code ?? 500).send({ ...r.out, attempts: r.attempts });
         } else {
+            if (global.debugHistory) global.debugHistory.pushError(data.mode, r.err && r.err.message);
             res.status(500).json(errorBody(data, r.err));
         }
     } finally {
