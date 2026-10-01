@@ -72,10 +72,12 @@ async function createWarmSlot(url, proxy) {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
 
     // Wait for Turnstile api.js (HTML <script> tag, same pattern as the
-    // working fakePage flow). render=explicit so nothing auto-renders;
-    // each turbo request renders its own widget via __turboSolve.
+    // working fakePage flow). The onload callback sets __turboApiReady.
     try {
-        await page.waitForFunction(() => !!window.turnstile, { timeout: 20000 });
+        await page.waitForFunction(
+            () => !!window.turnstile || !!window.__turboApiReady,
+            { timeout: 20000 }
+        );
     } catch (e) {
         // Diagnostic: what did the CDN actually serve?
         const peek = await page.evaluate(async () => {
