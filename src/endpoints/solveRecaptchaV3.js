@@ -18,14 +18,18 @@ async function solveRecaptchaV3({ url, proxy, headers, debug, timeout, siteKey, 
     try {
         return await withTimeout(
             (async () => {
+                console.log('[v3] stage: newPage');
                 page = await context.newPage();
+                console.log('[v3] stage: setupPage');
                 await setupPage(page, proxy, { headers });
 
                 // For reCAPTCHA v3, load the REAL page without request interception.
                 // (Interception interferes with proxy authentication.)
                 // We navigate to the actual URL and execute grecaptcha there.
 
+                console.log('[v3] stage: goto ' + url);
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                console.log('[v3] stage: goto done');
 
                 // Inject reCAPTCHA v3 api.js ourselves (don't depend on the page).
                 // With a working proxy, Google serves the script.
@@ -42,6 +46,7 @@ async function solveRecaptchaV3({ url, proxy, headers, debug, timeout, siteKey, 
                         setTimeout(() => resolve('timeout'), 20000);
                     });
                 }, siteKey);
+                console.log('[v3] stage: injected=' + injected);
 
                 // Diagnostic: check what actually loaded
                 const diag = await page.evaluate(() => ({
