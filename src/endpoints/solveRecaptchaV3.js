@@ -20,7 +20,7 @@ async function solveRecaptchaV3({ url, proxy, headers, debug, timeout, siteKey, 
             (async () => {
                 console.log('[v3] stage: newPage');
                 page = await context.newPage();
-                console.log('[v3] stage: setupPage');
+                console.log('[v3] stage: setupPage proxy=' + (proxy ? proxy.host + ':' + proxy.port : 'none'));
                 await setupPage(page, proxy, { headers });
 
                 // For reCAPTCHA v3, load the REAL page without request interception.
