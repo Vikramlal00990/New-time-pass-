@@ -76,6 +76,18 @@ app.get('/metrics', (req, res) => {
     res.type('text/plain').send(metrics.renderPrometheus());
 });
 
+// ---- dashboard + history (advanced UI from solver_ultimate.js) ----
+const dashboard = require('./module/dashboard');
+app.get('/dashboard', (req, res) => {
+    res.type('text/html').send(dashboard.dashboardHtml({ proxyPool: poolStatus }));
+});
+app.get('/history', (req, res) => {
+    res.json(dashboard.dbHistory(parseInt(req.query.days) || 7));
+});
+app.get('/history/daily', (req, res) => {
+    res.json(dashboard.dbDailyStats());
+});
+
 // ---- mode runners ----
 const getSource = require('./endpoints/getSource');
 const solveTurnstileMin = require('./endpoints/solveTurnstile.min');
@@ -176,10 +188,30 @@ async function executeRequest(data) {
     const t0 = Date.now();
     try {
         const { out, attempts } = await runWithRetry(data);
-        metrics.requestFinished(data.mode, true, Date.now() - t0);
+        const elapsed = Date.now() - t0;
+        metrics.requestFinished(data.mode, true, elapsed);
+        // Dashboard + SQLite history
+        try {
+            dashboard.recordSolve({
+                mode: data.mode,
+                elapsedMs: elapsed,
+                ok: true,
+                warm: out.warm,
+                token: out.token,
+            });
+        } catch (e) {}
         return { ok: true, out, attempts };
     } catch (err) {
-        metrics.requestFinished(data.mode, false, Date.now() - t0);
+        const elapsed = Date.now() - t0;
+        metrics.requestFinished(data.mode, false, elapsed);
+        try {
+            dashboard.recordSolve({
+                mode: data.mode,
+                elapsedMs: elapsed,
+                ok: false,
+                warm: undefined,
+            });
+        } catch (e) {}
         return { ok: false, err };
     }
 }

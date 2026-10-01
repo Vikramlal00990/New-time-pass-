@@ -19,6 +19,9 @@ const schema = {
                 'waf-session',
                 'detect',
                 'recaptcha',
+                'recaptcha-v3',
+                'recaptcha-enterprise',
+                'recaptcha-v2',
                 'hcaptcha',
             ],
         },
@@ -70,6 +73,12 @@ const schema = {
         headers: {
             type: 'object',
             additionalProperties: { type: 'string' },
+        },
+        // Bulk endpoint: number of tokens (1-10)
+        count: {
+            type: 'integer',
+            minimum: 1,
+            maximum: 10,
         },
     },
     required: ['mode', 'url'],
