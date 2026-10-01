@@ -39,13 +39,27 @@ async function solveRecaptchaV3({ url, proxy, headers, debug, timeout, siteKey, 
 
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
+                // Diagnostic: check what actually loaded
+                const diag = await page.evaluate(() => ({
+                    hasGrecaptcha: typeof window.grecaptcha !== 'undefined',
+                    grecaptchaKeys: window.grecaptcha ? Object.keys(window.grecaptcha).slice(0, 10) : [],
+                    hasExecute: !!(window.grecaptcha && window.grecaptcha.execute),
+                    scripts: Array.from(document.scripts).map(s => s.src).filter(s => s.includes('recaptcha') || s.includes('google')).slice(0, 5),
+                    title: document.title.substring(0, 50)
+                }));
+
                 // The test page already loads its own reCAPTCHA v3.
                 // Use the page's existing grecaptcha instance instead of injecting.
                 // (Injecting api.js triggers Google's bot detection.)
-                await page.waitForFunction(
-                    () => window.grecaptcha && typeof window.grecaptcha.execute === 'function',
-                    { timeout: 25000 }
-                );
+                try {
+                    await page.waitForFunction(
+                        () => window.grecaptcha && typeof window.grecaptcha.execute === 'function',
+                        { timeout: 25000 }
+                    );
+                } catch (e) {
+                    // Return diagnostic info in the error so we can see what's happening
+                    throw new Error('recaptcha not ready. Diag: ' + JSON.stringify(diag));
+                }
 
                 const token = await page.evaluate((sk, a) => {
                     return new Promise((resolve, reject) => {
