@@ -112,3 +112,35 @@ describe('fingerprint', () => {
         }
     });
 });
+
+describe('turbo warm pool', () => {
+    const warmPool = require('../src/module/warmPool');
+    const validate = require('../src/module/reqValidate');
+
+    test('poolKey groups by origin and proxy', () => {
+        expect(warmPool.poolKey('https://a.com/', null)).toBe('https://a.com|direct');
+        expect(warmPool.poolKey('https://a.com/x?y=1', null)).toBe('https://a.com|direct');
+        expect(warmPool.poolKey('https://a.com/', { host: 'h', port: 8080 })).toBe(
+            'https://a.com|http://h:8080'
+        );
+        expect(warmPool.poolKey('https://b.com/', null)).not.toBe(
+            warmPool.poolKey('https://a.com/', null)
+        );
+    });
+
+    test('turbo flag passes validation', () => {
+        expect(
+            validate({ mode: 'turnstile-min', url: 'https://example.com/', turbo: true })
+        ).toBe(true);
+        expect(
+            validate({ mode: 'turnstile-min', url: 'https://example.com/', turbo: 'yes' })
+        ).not.toBe(true);
+    });
+
+    test('acquire with no browser falls back (returns null, no throw)', async () => {
+        // global.browser is undefined in tests (SKIP_LAUNCH) — acquire must
+        // not throw; the endpoint falls back to a normal solve instead.
+        const res = await warmPool.acquire('https://example.com/', null);
+        expect(res).toBe(null);
+    });
+});

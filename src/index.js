@@ -79,6 +79,7 @@ app.get('/metrics', (req, res) => {
 // ---- mode runners ----
 const getSource = require('./endpoints/getSource');
 const solveTurnstileMin = require('./endpoints/solveTurnstile.min');
+const solveTurnstileTurbo = require('./endpoints/solveTurnstile.turbo');
 const solveTurnstileMax = require('./endpoints/solveTurnstile.max');
 const wafSession = require('./endpoints/wafSession');
 const detect = require('./endpoints/detect');
@@ -91,6 +92,9 @@ async function runMode(data, proxy) {
         case 'source':
             return { source: await getSource(args), code: 200 };
         case 'turnstile-min':
+            if (data.turbo === true) {
+                return { token: await solveTurnstileTurbo(args), code: 200, turbo: true };
+            }
             return { token: await solveTurnstileMin(args), code: 200 };
         case 'turnstile-max':
             return { token: await solveTurnstileMax(args), code: 200 };

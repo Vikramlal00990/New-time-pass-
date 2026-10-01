@@ -47,6 +47,10 @@ const schema = {
         debug: {
             type: 'boolean',
         },
+        // Turbo: reuse a warm page for turnstile-min (fresh token every call)
+        turbo: {
+            type: 'boolean',
+        },
         // Async job: return a jobId immediately, result via GET /jobs/:id
         async: {
             type: 'boolean',

@@ -208,6 +208,8 @@ Set the `timeOut` env var in milliseconds (default `60000`).
 | `PROXY_BAN_MS` | `300000` | How long a failed pool proxy stays banned (5 min) |
 | `REQUEST_QUEUE` | `false` | Set `true` to queue over-limit requests instead of returning `429` |
 | `QUEUE_MAX_WAIT_MS` | `120000` | How long a queued request waits for a browser slot (else `503`) |
+| `turbo` (request) | `false` | `turnstile-min` + `"turbo": true` reuses a warm page (api.js preloaded, Cloudflare session live) and renders a fresh widget per call — much faster. Every token is freshly issued; only the page/session is reused. Falls back to a normal solve automatically if no warm page is free |
+| `TURBO_WARM_PAGES` | `3` | Warm pages kept per site (origin). First turbo request warms up (~seconds), following ones are fast |
 | `FINGERPRINT_ROTATION` | `true` | Rotate user-agent / viewport / timezone / locale per request |
 | `BROWSER_MAX_SOLVES` | `0` | Restart the browser every N solves (`0` = disabled) |
 | `JOB_TTL_MS` | `3600000` | How long async job results are kept |
