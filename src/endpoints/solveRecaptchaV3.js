@@ -1,7 +1,7 @@
 'use strict';
 
 const withTimeout = require('../module/timeout');
-const { newContext, setupPage, BLOCKED_TYPES, attachDebugShot, resolveTimeout, attachSpeedInterceptor } = require('../module/browserContext');
+const { newContext, setupPage, attachDebugShot, resolveTimeout } = require('../module/browserContext');
 
 /**
  * Solve reCAPTCHA v3 (score-based, invisible).
@@ -21,9 +21,9 @@ async function solveRecaptchaV3({ url, proxy, headers, debug, timeout, siteKey, 
                 page = await context.newPage();
                 await setupPage(page, proxy, { headers });
 
-                // For reCAPTCHA v3, load the REAL page (not a fake template).
-                // Use the shared speed interceptor (proxy-safe) instead of manual interception.
-                await attachSpeedInterceptor(page);
+                // For reCAPTCHA v3, load the REAL page without request interception.
+                // (Interception interferes with proxy authentication.)
+                // We navigate to the actual URL and execute grecaptcha there.
 
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
