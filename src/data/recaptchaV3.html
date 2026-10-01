@@ -6,17 +6,19 @@
     <title></title>
 </head>
 <body>
-    <script src="https://www.google.com/recaptcha/api.js?render=<site-key>" async defer></script>
+    <script src="https://www.google.com/recaptcha/api.js?render=<site-key>&onload=onloadRecaptchaCallback" async defer></script>
     <script>
-        // Signal when grecaptcha is ready
         window.__recaptchaReady = false;
-        var checkIv = setInterval(function() {
-            if (window.grecaptcha && typeof window.grecaptcha.execute === 'function') {
-                window.__recaptchaReady = true;
-                clearInterval(checkIv);
-            }
-        }, 200);
-        setTimeout(function() { clearInterval(checkIv); }, 25000);
+        window.onloadRecaptchaCallback = function() {
+            // Poll until execute is available (api.js loads async)
+            var iv = setInterval(function() {
+                if (window.grecaptcha && typeof window.grecaptcha.execute === 'function') {
+                    window.__recaptchaReady = true;
+                    clearInterval(iv);
+                }
+            }, 200);
+            setTimeout(function() { clearInterval(iv); }, 20000);
+        };
     </script>
 </body>
 </html>
