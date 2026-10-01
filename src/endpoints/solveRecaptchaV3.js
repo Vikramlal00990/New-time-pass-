@@ -58,7 +58,10 @@ async function solveRecaptchaV3({ url, proxy, headers, debug, timeout, siteKey, 
                     );
                 } catch (e) {
                     // Return diagnostic info in the error so we can see what's happening
-                    throw new Error('recaptcha not ready. Diag: ' + JSON.stringify(diag));
+                    const hint = !diag.hasGrecaptcha
+                        ? ' Google blocked reCAPTCHA scripts from this IP (datacenter IP flagged). Try with a residential proxy.'
+                        : '';
+                    throw new Error('recaptcha not ready.' + hint + ' Diag: ' + JSON.stringify(diag));
                 }
 
                 const token = await page.evaluate((sk, a) => {
