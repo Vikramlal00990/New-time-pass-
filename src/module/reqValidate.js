@@ -80,6 +80,14 @@ const schema = {
             minimum: 1,
             maximum: 10,
         },
+        // reCAPTCHA v3 action name
+        action: {
+            type: 'string',
+        },
+        // reCAPTCHA v2 invisible mode
+        invisible: {
+            type: 'boolean',
+        },
     },
     required: ['mode', 'url'],
     additionalProperties: false,
