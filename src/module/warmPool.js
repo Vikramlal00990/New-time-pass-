@@ -39,8 +39,14 @@ async function createWarmSlot(url, proxy) {
     const context = await newContext(proxy);
     const page = await context.newPage();
     await setupPage(page, proxy, {});
+    // Minimal template — just the slot div. api.js and the solver are
+    // injected via evaluate below so we get explicit load success/failure
+    // instead of depending on HTML parser script timing.
     const template = String(
         fs.readFileSync(path.join(__dirname, '..', 'data', 'turboPage.html'))
+    );
+    const solverJs = String(
+        fs.readFileSync(path.join(__dirname, '..', 'data', 'turboSolver.js'))
     );
     await page.setRequestInterception(true);
     page.on('request', (request) => {
@@ -64,10 +70,28 @@ async function createWarmSlot(url, proxy) {
         }
     });
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
-    await page.waitForFunction(
-        () => window.turnstile && window.__turboSolve,
-        { timeout: 25000 }
-    );
+
+    // Load Turnstile api.js with explicit onload/onerror — no guessing.
+    const apiOk = await page.evaluate(() => {
+        return new Promise((resolve, reject) => {
+            if (window.turnstile) return resolve(true);
+            const s = document.createElement('script');
+            s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+            s.onload = () => resolve(!!window.turnstile);
+            s.onerror = () => reject(new Error('api.js onerror'));
+            document.head.appendChild(s);
+            setTimeout(() => reject(new Error('api.js load timeout (20s)')), 20000);
+        });
+    }).catch((e) => {
+        throw new Error('Warmup api.js failed: ' + (e && e.message ? e.message : e));
+    });
+    if (!apiOk) throw new Error('Warmup api.js failed: window.turnstile missing after load');
+
+    // Inject the per-request solver directly into the page.
+    await page.evaluate(solverJs);
+    const hasSolver = await page.evaluate(() => typeof window.__turboSolve === 'function');
+    if (!hasSolver) throw new Error('Warmup solver injection failed');
+
     return { page, context, busy: false, fails: 0 };
 }
 

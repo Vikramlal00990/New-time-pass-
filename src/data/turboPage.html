@@ -1,51 +1,7 @@
 <!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title></title>
-</head>
-
+<html>
+<head><meta charset="utf-8"></head>
 <body>
-    <div id="turbo-slot"></div>
-    <!-- api.js loads ONCE per warm page; each solve renders a fresh widget -->
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-    <script>
-        // Turbo solver: renders a brand-new widget per call and resolves
-        // with a freshly issued token. The page (and its Cloudflare session)
-        // stays warm across calls; tokens are never reused.
-        window.__turboSolve = function (siteKey, timeoutMs) {
-            return new Promise(function (resolve, reject) {
-                var done = false;
-                var slot = document.getElementById('turbo-slot');
-                slot.innerHTML = '';
-                var timer = setTimeout(function () {
-                    if (!done) {
-                        done = true;
-                        try { turnstile.reset(); } catch (e) {}
-                        reject(new Error('Turbo widget timeout'));
-                    }
-                }, timeoutMs || 30000);
-                function finish(ok, val) {
-                    if (done) return;
-                    done = true;
-                    clearTimeout(timer);
-                    try { turnstile.reset(); } catch (e) {}
-                    slot.innerHTML = '';
-                    if (ok) resolve(val); else reject(val);
-                }
-                try {
-                    turnstile.render(slot, {
-                        sitekey: siteKey,
-                        callback: function (token) { finish(true, token); },
-                        'error-callback': function () { finish(false, new Error('Turbo widget error')); },
-                        'expired-callback': function () { finish(false, new Error('Turbo token expired')); }
-                    });
-                } catch (e) { finish(false, e); }
-            });
-        };
-    </script>
+<div id="turbo-slot"></div>
 </body>
-
 </html>
