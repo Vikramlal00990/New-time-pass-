@@ -71,32 +71,25 @@ async function createWarmSlot(url, proxy) {
     });
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
 
-    // Load Turnstile api.js with explicit onload/onerror — no guessing.
-    // First, peek at what the CDN actually serves (diagnostic).
-    const apiPeek = await page.evaluate(async () => {
-        try {
-            const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/api.js', { redirect: 'follow' });
-            const t = await r.text();
-            return { status: r.status, len: t.length, head: t.slice(0, 120), url: r.url };
-        } catch (e) {
-            return { fetchError: String(e && e.message ? e.message : e) };
-        }
-    }).catch((e) => ({ fetchError: String(e && e.message ? e.message : e) }));
-    console.log('[turbo] api.js peek: ' + JSON.stringify(apiPeek).slice(0, 300));
-    const apiOk = await page.evaluate(() => {
-        return new Promise((resolve, reject) => {
-            if (window.turnstile) return resolve(true);
-            const s = document.createElement('script');
-            s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-            s.onload = () => resolve(!!window.turnstile);
-            s.onerror = () => reject(new Error('api.js onerror'));
-            document.head.appendChild(s);
-            setTimeout(() => reject(new Error('api.js load timeout (20s)')), 20000);
-        });
-    }).catch((e) => {
-        throw new Error('Warmup api.js failed: ' + (e && e.message ? e.message : e));
-    });
-    if (!apiOk) throw new Error('Warmup api.js failed: window.turnstile missing after load');
+    // Wait for Turnstile api.js (HTML <script> tag, same pattern as the
+    // working fakePage flow). render=explicit so nothing auto-renders;
+    // each turbo request renders its own widget via __turboSolve.
+    try {
+        await page.waitForFunction(() => !!window.turnstile, { timeout: 20000 });
+    } catch (e) {
+        // Diagnostic: what did the CDN actually serve?
+        const peek = await page.evaluate(async () => {
+            try {
+                const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit', { redirect: 'follow' });
+                const t = await r.text();
+                return { status: r.status, len: t.length, head: t.slice(0, 100) };
+            } catch (err) {
+                return { fetchError: String(err && err.message ? err.message : err) };
+            }
+        }).catch((err) => ({ fetchError: String(err) }));
+        console.log('[turbo] api.js peek: ' + JSON.stringify(peek).slice(0, 250));
+        throw new Error('Warmup api.js failed: window.turnstile missing after load');
+    }
 
     // Inject the per-request solver directly into the page.
     await page.evaluate(solverJs);
