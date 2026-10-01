@@ -14,6 +14,8 @@ const warmPool = require('../module/warmPool');
  * or the warm solve fails — turbo never fails where normal would succeed.
  *
  * Every token is freshly issued; only the page/session is reused.
+ *
+ * Returns { token, warm, warmError, turboMs } — runMode spreads this.
  */
 async function solveTurnstileTurbo({ url, proxy, headers, debug, timeout, siteKey }) {
     if (!url) throw new Error('Missing url parameter');
@@ -22,32 +24,29 @@ async function solveTurnstileTurbo({ url, proxy, headers, debug, timeout, siteKe
     const ms = resolveTimeout(timeout);
     const t0 = Date.now();
     let acquired = null;
-    let warmUsed = false;
-    let warmError = null;
 
     try {
-        const token = await withTimeout(
+        return await withTimeout(
             (async () => {
                 const tA0 = Date.now();
                 acquired = await warmPool.acquire(url, proxy);
                 const acquireMs = Date.now() - tA0;
-                warmError = acquired && acquired.warmError ? acquired.warmError : null;
+                const warmError = acquired && acquired.warmError ? acquired.warmError : null;
 
                 if (!acquired || !acquired.slot) {
                     // Pool exhausted / warmup failed — normal fresh-context solve
+                    console.log(`[turbo] fallback (no warm slot): ${warmError || 'n/a'}`);
                     const tS0 = Date.now();
-                    const r = await solveInvisibleWidget({
+                    const tok = await solveInvisibleWidget({
                         url, proxy, headers, debug, timeout,
                         siteKey, template: 'fakePage.html', label: 'solveTurnstileTurbo/fallback',
                     });
-                    r.turbo = true;
-                    r.warm = false;
-                    r.warmError = warmError;
-                    r.turboMs = { acquire: acquireMs, solve: Date.now() - tS0, total: Date.now() - t0 };
-                    return r;
+                    return {
+                        token: tok, warm: false, warmError,
+                        turboMs: { acquire: acquireMs, solve: Date.now() - tS0, total: Date.now() - t0 },
+                    };
                 }
                 const { slot, release } = acquired;
-                warmUsed = true;
                 try {
                     const tS0 = Date.now();
                     console.log(`[turbo] warm solve start (acquire ${acquireMs}ms)`);
@@ -57,24 +56,25 @@ async function solveTurnstileTurbo({ url, proxy, headers, debug, timeout, siteKe
                         30000
                     );
                     if (!tok || tok.length < 10) throw new Error('Failed to get token');
+                    console.log(`[turbo] warm solve ok in ${Date.now() - tS0}ms`);
                     return {
-                        token: tok, code: 200, turbo: true, warm: true,
+                        token: tok, warm: true, warmError: null,
                         turboMs: { acquire: acquireMs, solve: Date.now() - tS0, total: Date.now() - t0 },
                     };
                 } catch (e) {
-                    warmError = e && e.message ? String(e.message).slice(0, 200) : String(e);
+                    const werr = e && e.message ? String(e.message).slice(0, 200) : String(e);
+                    console.log(`[turbo] warm solve failed: ${werr} — falling back`);
                     await warmPool.invalidate(slot, url, proxy).catch(() => {});
                     // Warm solve failed — one fresh-context attempt
                     const tS0 = Date.now();
-                    const r = await solveInvisibleWidget({
+                    const tok = await solveInvisibleWidget({
                         url, proxy, headers, debug, timeout,
                         siteKey, template: 'fakePage.html', label: 'solveTurnstileTurbo/retry',
                     });
-                    r.turbo = true;
-                    r.warm = false;
-                    r.warmError = warmError;
-                    r.turboMs = { acquire: acquireMs, solve: Date.now() - tS0, total: Date.now() - t0 };
-                    return r;
+                    return {
+                        token: tok, warm: false, warmError: werr,
+                        turboMs: { acquire: acquireMs, solve: Date.now() - tS0, total: Date.now() - t0 },
+                    };
                 } finally {
                     release();
                 }
@@ -82,7 +82,6 @@ async function solveTurnstileTurbo({ url, proxy, headers, debug, timeout, siteKe
             ms,
             'solveTurnstileTurbo'
         );
-        return token;
     } catch (err) {
         if (debug && acquired && acquired.slot) await attachDebugShot(acquired.slot.page, err);
         throw err;

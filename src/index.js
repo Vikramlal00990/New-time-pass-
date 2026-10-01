@@ -93,7 +93,11 @@ async function runMode(data, proxy) {
             return { source: await getSource(args), code: 200 };
         case 'turnstile-min':
             if (data.turbo === true) {
-                return { token: await solveTurnstileTurbo(args), code: 200, turbo: true };
+                const r = await solveTurnstileTurbo(args);
+                if (r && typeof r === 'object') {
+                    return { code: 200, turbo: true, ...r };
+                }
+                return { token: r, code: 200, turbo: true };
             }
             return { token: await solveTurnstileMin(args), code: 200 };
         case 'turnstile-max':
