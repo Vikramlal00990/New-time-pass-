@@ -39,21 +39,9 @@ async function solveRecaptchaV3({ url, proxy, headers, debug, timeout, siteKey, 
 
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-                // Inject api.js?render=siteKey into the real page
-                await page.evaluate((sk) => {
-                    return new Promise((resolve, reject) => {
-                        if (window.grecaptcha && typeof window.grecaptcha.execute === 'function') {
-                            return resolve();
-                        }
-                        const s = document.createElement('script');
-                        s.src = 'https://www.google.com/recaptcha/api.js?render=' + sk;
-                        s.onload = () => resolve();
-                        s.onerror = () => reject(new Error('recaptcha api.js load failed'));
-                        document.head.appendChild(s);
-                        setTimeout(() => reject(new Error('recaptcha api.js timeout')), 20000);
-                    });
-                }, siteKey);
-
+                // The test page already loads its own reCAPTCHA v3.
+                // Use the page's existing grecaptcha instance instead of injecting.
+                // (Injecting api.js triggers Google's bot detection.)
                 await page.waitForFunction(
                     () => window.grecaptcha && typeof window.grecaptcha.execute === 'function',
                     { timeout: 25000 }
