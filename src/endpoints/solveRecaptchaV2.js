@@ -1,7 +1,7 @@
 'use strict';
 
 const withTimeout = require('../module/timeout');
-const { newContext, setupPage, BLOCKED_TYPES, attachDebugShot, resolveTimeout } = require('../module/browserContext');
+const { newContext, setupPage, attachDebugShot, resolveTimeout } = require('../module/browserContext');
 
 /**
  * Solve reCAPTCHA v2 (checkbox or invisible).
@@ -23,36 +23,46 @@ async function solveRecaptchaV2({ url, proxy, headers, debug, timeout, siteKey, 
                 page = await context.newPage();
                 await setupPage(page, proxy, { headers });
 
-                // Use HTML template with script tags (proven pattern from Turnstile).
-                const fs = require('fs');
-                const path = require('path');
-                const size = invisible === true ? 'invisible' : 'normal';
-                const template = String(
-                    fs.readFileSync(path.join(__dirname, '..', 'data', 'recaptchaV2.html'))
-                ).replace('<site-key>', siteKey).replace(/<size>/g, size);
-
-                await page.setRequestInterception(true);
-                page.on('request', (request) => {
-                    try {
-                        const rurl = request.url();
-                        const rtype = request.resourceType();
-                        if (([url, url + '/'].includes(rurl) && rtype === 'document')) {
-                            request.respond({
-                                status: 200,
-                                contentType: 'text/html',
-                                body: template,
-                            });
-                        } else if (rurl.includes('google.com/recaptcha') || rurl.includes('gstatic.com/recaptcha')) {
-                            request.continue();
-                        } else if (BLOCKED_TYPES.has(rtype)) {
-                            request.abort();
-                        } else {
-                            request.continue();
-                        }
-                    } catch (e) {}
-                });
-
+                // For reCAPTCHA v2, load the REAL page (no fake template).
+                // Fake templates + manual interception break proxy authentication.
+                // We render the widget on the real page via script injection.
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+                // Inject reCAPTCHA v2 api.js and render widget
+                const size = invisible === true ? 'invisible' : 'normal';
+                await page.evaluate((sk, sz) => {
+                    return new Promise((resolve) => {
+                        window.__v2Token = null;
+                        window.__recaptchaReady = false;
+                        window.__recaptchaError = null;
+                        window.__v2Callback = function(token) {
+                            window.__v2Token = token;
+                        };
+                        window.__v2Render = function() {
+                            try {
+                                window.__v2WidgetId = window.grecaptcha.render('v2widget', {
+                                    'sitekey': sk,
+                                    'size': sz,
+                                    'callback': window.__v2Callback
+                                });
+                                window.__recaptchaReady = true;
+                            } catch (e) {
+                                window.__recaptchaError = e.message;
+                            }
+                            resolve();
+                        };
+                        // Create container
+                        const div = document.createElement('div');
+                        div.id = 'v2widget';
+                        document.body.appendChild(div);
+                        // Load api.js
+                        const s = document.createElement('script');
+                        s.src = 'https://www.google.com/recaptcha/api.js?onload=__v2Render&render=explicit';
+                        s.onerror = () => { window.__recaptchaError = 'api.js load failed'; resolve(); };
+                        document.head.appendChild(s);
+                        setTimeout(() => resolve(), 20000);
+                    });
+                }, siteKey, size);
 
                 // Wait for widget to render (or error)
                 await page.waitForFunction(
