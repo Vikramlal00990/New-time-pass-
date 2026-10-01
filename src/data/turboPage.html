@@ -26,7 +26,7 @@
                         try { turnstile.reset(); } catch (e) {}
                         reject(new Error('Turbo widget timeout'));
                     }
-                }, timeoutMs || 55000);
+                }, timeoutMs || 30000);
                 function finish(ok, val) {
                     if (done) return;
                     done = true;

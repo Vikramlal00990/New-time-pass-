@@ -63,10 +63,10 @@ async function createWarmSlot(url, proxy) {
             // page may already be closed — ignore
         }
     });
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
     await page.waitForFunction(
         () => window.turnstile && window.__turboSolve,
-        { timeout: 30000 }
+        { timeout: 25000 }
     );
     return { page, context, busy: false, fails: 0 };
 }
@@ -105,13 +105,16 @@ async function acquire(url, proxy) {
     let slot = tryTake();
     let warmError = null;
     if (!slot && pool.slots.length < MAX_WARM_PER_ORIGIN) {
+        const tW0 = Date.now();
         try {
             slot = await createWarmSlot(url, proxy);
             slot.busy = true;
             pool.slots.push(slot);
+            console.log(`[turbo] warmup ok in ${Date.now() - tW0}ms`);
         } catch (e) {
             slot = null; // warmup failed — caller falls back
             warmError = e && e.message ? String(e.message).slice(0, 200) : String(e);
+            console.log(`[turbo] warmup failed in ${Date.now() - tW0}ms: ${warmError}`);
         }
     }
     if (slot) {

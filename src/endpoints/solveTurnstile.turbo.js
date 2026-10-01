@@ -50,10 +50,11 @@ async function solveTurnstileTurbo({ url, proxy, headers, debug, timeout, siteKe
                 warmUsed = true;
                 try {
                     const tS0 = Date.now();
+                    console.log(`[turbo] warm solve start (acquire ${acquireMs}ms)`);
                     const tok = await slot.page.evaluate(
                         (key, tmo) => window.__turboSolve(key, tmo),
                         siteKey,
-                        Math.max(10000, ms - 5000)
+                        30000
                     );
                     if (!tok || tok.length < 10) throw new Error('Failed to get token');
                     return {
