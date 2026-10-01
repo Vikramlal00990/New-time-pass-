@@ -20,35 +20,60 @@ async function solveTurnstileTurbo({ url, proxy, headers, debug, timeout, siteKe
     if (!siteKey) throw new Error('Missing siteKey parameter');
 
     const ms = resolveTimeout(timeout);
+    const t0 = Date.now();
     let acquired = null;
+    let warmUsed = false;
+    let warmError = null;
 
     try {
-        return await withTimeout(
+        const token = await withTimeout(
             (async () => {
+                const tA0 = Date.now();
                 acquired = await warmPool.acquire(url, proxy);
-                if (!acquired) {
-                    // Pool exhausted — normal fresh-context solve
-                    return solveInvisibleWidget({
+                const acquireMs = Date.now() - tA0;
+                warmError = acquired && acquired.warmError ? acquired.warmError : null;
+
+                if (!acquired || !acquired.slot) {
+                    // Pool exhausted / warmup failed — normal fresh-context solve
+                    const tS0 = Date.now();
+                    const r = await solveInvisibleWidget({
                         url, proxy, headers, debug, timeout,
                         siteKey, template: 'fakePage.html', label: 'solveTurnstileTurbo/fallback',
                     });
+                    r.turbo = true;
+                    r.warm = false;
+                    r.warmError = warmError;
+                    r.turboMs = { acquire: acquireMs, solve: Date.now() - tS0, total: Date.now() - t0 };
+                    return r;
                 }
                 const { slot, release } = acquired;
+                warmUsed = true;
                 try {
-                    const token = await slot.page.evaluate(
+                    const tS0 = Date.now();
+                    const tok = await slot.page.evaluate(
                         (key, tmo) => window.__turboSolve(key, tmo),
                         siteKey,
                         Math.max(10000, ms - 5000)
                     );
-                    if (!token || token.length < 10) throw new Error('Failed to get token');
-                    return token;
+                    if (!tok || tok.length < 10) throw new Error('Failed to get token');
+                    return {
+                        token: tok, code: 200, turbo: true, warm: true,
+                        turboMs: { acquire: acquireMs, solve: Date.now() - tS0, total: Date.now() - t0 },
+                    };
                 } catch (e) {
+                    warmError = e && e.message ? String(e.message).slice(0, 200) : String(e);
                     await warmPool.invalidate(slot, url, proxy).catch(() => {});
                     // Warm solve failed — one fresh-context attempt
-                    return solveInvisibleWidget({
+                    const tS0 = Date.now();
+                    const r = await solveInvisibleWidget({
                         url, proxy, headers, debug, timeout,
                         siteKey, template: 'fakePage.html', label: 'solveTurnstileTurbo/retry',
                     });
+                    r.turbo = true;
+                    r.warm = false;
+                    r.warmError = warmError;
+                    r.turboMs = { acquire: acquireMs, solve: Date.now() - tS0, total: Date.now() - t0 };
+                    return r;
                 } finally {
                     release();
                 }
@@ -56,8 +81,9 @@ async function solveTurnstileTurbo({ url, proxy, headers, debug, timeout, siteKe
             ms,
             'solveTurnstileTurbo'
         );
+        return token;
     } catch (err) {
-        if (debug && acquired) await attachDebugShot(acquired.slot.page, err);
+        if (debug && acquired && acquired.slot) await attachDebugShot(acquired.slot.page, err);
         throw err;
     }
 }

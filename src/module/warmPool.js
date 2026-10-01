@@ -103,6 +103,7 @@ async function acquire(url, proxy) {
     }
 
     let slot = tryTake();
+    let warmError = null;
     if (!slot && pool.slots.length < MAX_WARM_PER_ORIGIN) {
         try {
             slot = await createWarmSlot(url, proxy);
@@ -110,13 +111,14 @@ async function acquire(url, proxy) {
             pool.slots.push(slot);
         } catch (e) {
             slot = null; // warmup failed — caller falls back
+            warmError = e && e.message ? String(e.message).slice(0, 200) : String(e);
         }
     }
     if (slot) {
-        return { slot, release: () => releaseSlot(pool, slot) };
+        return { slot, release: () => releaseSlot(pool, slot), warmError: null };
     }
     if (pool.slots.length < MAX_WARM_PER_ORIGIN) {
-        return null; // warmup failed and pool not full — nothing to wait for
+        return { slot: null, release: null, warmError }; // warmup failed and pool not full
     }
 
     // Pool full and all warm pages busy — wait briefly for one to free up
@@ -124,11 +126,11 @@ async function acquire(url, proxy) {
         const timer = setTimeout(() => {
             const i = pool.waiters.indexOf(onFree);
             if (i >= 0) pool.waiters.splice(i, 1);
-            resolve(null); // timed out — caller falls back to normal solve
+            resolve({ slot: null, release: null, warmError: 'acquire timeout: all warm pages busy' });
         }, ACQUIRE_TIMEOUT_MS);
         const onFree = (s) => {
             clearTimeout(timer);
-            resolve({ slot: s, release: () => releaseSlot(pool, s) });
+            resolve({ slot: s, release: () => releaseSlot(pool, s), warmError: null });
         };
         pool.waiters.push(onFree);
     });
