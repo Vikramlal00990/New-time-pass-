@@ -39,6 +39,22 @@ async function solveRecaptchaV3({ url, proxy, headers, debug, timeout, siteKey, 
 
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
+                // Inject reCAPTCHA v3 api.js ourselves (don't depend on the page).
+                // With a working proxy, Google serves the script.
+                const injected = await page.evaluate((sk) => {
+                    return new Promise((resolve) => {
+                        if (window.grecaptcha && typeof window.grecaptcha.execute === 'function') {
+                            return resolve('already-present');
+                        }
+                        const s = document.createElement('script');
+                        s.src = 'https://www.google.com/recaptcha/api.js?render=' + encodeURIComponent(sk);
+                        s.onload = () => resolve('loaded');
+                        s.onerror = () => resolve('error');
+                        document.head.appendChild(s);
+                        setTimeout(() => resolve('timeout'), 20000);
+                    });
+                }, siteKey);
+
                 // Diagnostic: check what actually loaded
                 const diag = await page.evaluate(() => ({
                     hasGrecaptcha: typeof window.grecaptcha !== 'undefined',
@@ -47,19 +63,16 @@ async function solveRecaptchaV3({ url, proxy, headers, debug, timeout, siteKey, 
                     scripts: Array.from(document.scripts).map(s => s.src).filter(s => s.includes('recaptcha') || s.includes('google')).slice(0, 5),
                     title: document.title.substring(0, 50)
                 }));
+                diag.injected = injected;
 
-                // The test page already loads its own reCAPTCHA v3.
-                // Use the page's existing grecaptcha instance instead of injecting.
-                // (Injecting api.js triggers Google's bot detection.)
                 try {
                     await page.waitForFunction(
                         () => window.grecaptcha && typeof window.grecaptcha.execute === 'function',
                         { timeout: 25000 }
                     );
                 } catch (e) {
-                    // Return diagnostic info in the error so we can see what's happening
                     const hint = !diag.hasGrecaptcha
-                        ? ' Google blocked reCAPTCHA scripts from this IP (datacenter IP flagged). Try with a residential proxy.'
+                        ? ' Google blocked reCAPTCHA scripts (IP flagged or sitekey/domain mismatch).'
                         : '';
                     throw new Error('recaptcha not ready.' + hint + ' Diag: ' + JSON.stringify(diag));
                 }
