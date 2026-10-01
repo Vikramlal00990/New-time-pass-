@@ -84,6 +84,9 @@ const solveTurnstileMax = require('./endpoints/solveTurnstile.max');
 const wafSession = require('./endpoints/wafSession');
 const detect = require('./endpoints/detect');
 const solveRecaptcha = require('./endpoints/solveRecaptcha');
+const solveRecaptchaV3 = require('./endpoints/solveRecaptchaV3');
+const solveRecaptchaEnterprise = require('./endpoints/solveRecaptchaEnterprise');
+const solveRecaptchaV2 = require('./endpoints/solveRecaptchaV2');
 const solveHcaptcha = require('./endpoints/solveHcaptcha');
 
 async function runMode(data, proxy) {
@@ -104,6 +107,12 @@ async function runMode(data, proxy) {
             return { token: await solveTurnstileMax(args), code: 200 };
         case 'recaptcha':
             return { token: await solveRecaptcha(args), code: 200 };
+        case 'recaptcha-v3':
+            return { token: await solveRecaptchaV3(args), code: 200 };
+        case 'recaptcha-enterprise':
+            return { token: await solveRecaptchaEnterprise(args), code: 200 };
+        case 'recaptcha-v2':
+            return { token: await solveRecaptchaV2(args), code: 200 };
         case 'hcaptcha':
             return { token: await solveHcaptcha(args), code: 200 };
         case 'waf-session':
@@ -335,6 +344,56 @@ app.get('/jobs/:id', (req, res) => {
         attempts: job.attempts,
         createdAt: job.createdAt,
     });
+});
+
+// ---- bulk solve: N tokens for the same (url, mode, siteKey) ----
+// Body: { url, mode, siteKey, count (1-10), ...same options as /cf-clearance-scraper }
+// Solved sequentially to avoid browser overload. Each token is fresh.
+app.post('/bulk', async (req, res) => {
+    const data = req.body || {};
+    const count = Math.min(Math.max(parseInt(data.count) || 1, 1), 10);
+
+    const check = reqValidate(data);
+    if (check !== true) {
+        return res
+            .status(400)
+            .json({ code: 400, message: 'Bad Request', schema: check });
+    }
+
+    const { ok, entry } = auth.verify(data.authToken);
+    if (!ok) {
+        return res.status(401).json({ code: 401, message: 'Unauthorized' });
+    }
+
+    if (!browserReady()) {
+        return res.status(500).json({
+            code: 500,
+            message: 'The scanner is not ready yet. Please try again a little later.',
+        });
+    }
+
+    const results = [];
+    for (let i = 0; i < count; i++) {
+        if (!auth.tokenStart(entry)) {
+            results.push({ ok: false, error: 'Token concurrency limit reached' });
+            continue;
+        }
+        try {
+            const r = await executeRequest(data);
+            if (r.ok) {
+                results.push({ ok: true, ...r.out, attempts: r.attempts });
+            } else {
+                results.push({ ok: false, error: r.err && r.err.message ? r.err.message : String(r.err) });
+            }
+        } finally {
+            afterRequest(entry);
+        }
+        // Small breather between solves
+        if (i < count - 1) await new Promise((r) => setTimeout(r, 1000));
+    }
+
+    const succeeded = results.filter((x) => x.ok).length;
+    res.json({ code: 200, total: count, succeeded, failed: count - succeeded, results });
 });
 
 app.use((req, res) => {
