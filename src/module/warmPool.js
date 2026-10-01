@@ -72,6 +72,17 @@ async function createWarmSlot(url, proxy) {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
 
     // Load Turnstile api.js with explicit onload/onerror — no guessing.
+    // First, peek at what the CDN actually serves (diagnostic).
+    const apiPeek = await page.evaluate(async () => {
+        try {
+            const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/api.js', { redirect: 'follow' });
+            const t = await r.text();
+            return { status: r.status, len: t.length, head: t.slice(0, 120), url: r.url };
+        } catch (e) {
+            return { fetchError: String(e && e.message ? e.message : e) };
+        }
+    }).catch((e) => ({ fetchError: String(e && e.message ? e.message : e) }));
+    console.log('[turbo] api.js peek: ' + JSON.stringify(apiPeek).slice(0, 300));
     const apiOk = await page.evaluate(() => {
         return new Promise((resolve, reject) => {
             if (window.turnstile) return resolve(true);
